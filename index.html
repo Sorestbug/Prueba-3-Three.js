@@ -1,0 +1,424 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="utf-8" />
+    <title>Prueba Laberinto Three.js</title>
+    <style>
+        #contenedorInicio {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-image: url('./Recursos/Woods.jpg');
+            background-size: cover;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+            color: white;
+            font-family: Arial, sans-serif;
+        }
+        #textoInicio {
+            max-width: 80%;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="inicio" style="position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center;">
+        <h1>Pero No Le Di Importancia!</h1>
+        <p>Eres el Ijbiñij, estás perdido en un laberinto donde escuchas una musica creepy.</p>
+        <p>Tu mision es descubir de donde viene la musica.</p>
+        <p>Los Controles son w,a,s,d. Son controles de tanque.</p>
+        <p>Si necesitas ayuda puedes presionar "o".</p>
+        <p>Presiona "play" para comenzar el juego.</p>
+        <p>Las paredes aun no son solidas, NO LAS TRASPASES!.</p>
+        <button id="playButton">Play</button>
+    </div>
+    
+    <script type="module">
+        import * as THREE from './JS/three.module.js';
+        import { OrbitControls } from './JS/OrbitControls.js';
+        import { GLTFLoader } from './JS/GLTFLoader.js';
+        import { OBJLoader } from './JS/OBJLoader.js';
+        import { GUI } from './JS/lil-gui.module.min.js';
+
+        function cargarEscena() {
+            
+            // Crear Escena/Definir Fondo
+        var Escena = new THREE.Scene();
+        var CTexturaFondo = new THREE.TextureLoader();
+        CTexturaFondo.crossOrigin = "Anonymous";
+        CTexturaFondo.load('./Recursos/Skybox.jpg', function (TexturaFondo) {
+            Escena.background = TexturaFondo;
+        });
+
+        // Cámaras:
+        let CamaraPerspectiva, CamaraOrtografica, controles;
+        const valorCO = 60;
+        var rotacionActual = Math.PI / 2;
+
+
+        function alternarModoCamara() {
+            if (CamaraPerspectiva && CamaraPerspectiva instanceof THREE.PerspectiveCamera) {
+                // Cambiar a cámara ortográfica
+                CamaraPerspectiva = null;
+                CamaraOrtografica = new THREE.OrthographicCamera(-valorCO, valorCO, valorCO / (window.innerWidth / window.innerHeight), -valorCO / (window.innerWidth / window.innerHeight), 0.1, 100);
+                CamaraOrtografica.position.set(50, 25, 30);
+                CamaraOrtografica.lookAt(50, 25, 0);
+                controles.dispose();
+                controles = null;
+            } else {
+                // Cambiar a cámara de perspectiva
+                CamaraOrtografica = null;
+                CamaraPerspectiva = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight);
+                CamaraPerspectiva.position.set(AuxLobo.position);
+                //CamaraPerspectiva.lookAt(AuxCam.position);
+                controles = new OrbitControls(CamaraPerspectiva, Render.domElement);
+                CamaraPerspectiva.rotateZ(-rotacionActual);
+                controles.enabled = false;
+                
+            }
+        }
+       
+        // Crear Render
+        var Render = new THREE.WebGLRenderer();
+        Render.setSize(window.innerWidth, window.innerHeight);
+        document.body.appendChild(Render.domElement);
+        Render.setPixelRatio(window.devicePixelRatio);
+        Render.shadowMap.enabled = true;
+
+        // Crear Luz
+        const luz = new THREE.AmbientLight(0xffffff);
+        //Escena.add(luz);
+
+
+
+        //Esferas de Referencia
+        function crearEsfera(color, posicion) {
+        const geometriaEsfera = new THREE.SphereGeometry(1, 32, 32);
+        const materialEsfera = new THREE.MeshBasicMaterial({ color });
+        const esfera = new THREE.Mesh(geometriaEsfera, materialEsfera);
+        esfera.position.copy(posicion);
+        //Escena.add(esfera);
+         }
+        crearEsfera(0xffffff, new THREE.Vector3(0, 0, 0)); // Esfera Centro (blanca)
+        crearEsfera(0xff0000, new THREE.Vector3(10, 0, 0)); // Esfera +X (roja)
+        crearEsfera(0x00ff00, new THREE.Vector3(0, 10, 0)); // Esfera +Y (verde)
+        crearEsfera(0x0000ff, new THREE.Vector3(0, 0, 10)); // Esfera +Z (azul)
+        crearEsfera(0x00ffff, new THREE.Vector3(-10, 0, 0)); // Esfera -X (cian)
+        crearEsfera(0xff00ff, new THREE.Vector3(0, -10, 0)); // Esfera -Y (rosa)
+        crearEsfera(0xffff00, new THREE.Vector3(0, 0, -10)); // Esfera -Z (amarilla)
+
+        // Codigo Piso
+        const largoPiso = 100;
+        const anchoPiso = 50;
+        var Piso = new THREE.Mesh(new THREE.BoxGeometry(largoPiso, anchoPiso, 1),
+            new THREE.MeshStandardMaterial(
+                { map: new THREE.TextureLoader().load('Recursos/Pasto.jpg') }));
+        Piso.position.set(largoPiso/2, anchoPiso/2, 0);
+        Escena.add(Piso);
+
+        //Auxiliar Centro Piso
+        const geometriaAuxPiso = new THREE.SphereGeometry(1, 32, 32);
+        const materialAuxPiso = new THREE.MeshBasicMaterial({ color: 0xffffff });
+        const AuxPiso = new THREE.Mesh(geometriaAuxPiso, materialAuxPiso);
+        AuxPiso.position.set(largoPiso/2, anchoPiso/2, 0);
+        //Escena.add(AuxPiso);
+
+        //Cubos de inicio/final
+        const geometriaCubo = new THREE.BoxGeometry(10, 10, 1);
+        const materialCuboInicio = new THREE.MeshStandardMaterial({ color: 0x00ff00 });
+        const materialCuboFinal = new THREE.MeshStandardMaterial({ color: 0x0000ff });
+        const CuboInicio = new THREE.Mesh(geometriaCubo, materialCuboInicio);
+        CuboInicio.position.set(5, 5, 0.1);
+        Escena.add(CuboInicio);
+        const CuboFinal = new THREE.Mesh(geometriaCubo, materialCuboFinal);
+        CuboFinal.position.set(95, 45, 0.1);
+        Escena.add(CuboFinal);
+
+        // Añade Musica
+        var camino = './Recursos/DarkMusic.mp3';
+        const listener = new THREE.AudioListener();
+        //Camara.add(listener);
+        const musica = new THREE.PositionalAudio(listener);
+        const audioLoader = new THREE.AudioLoader();
+        audioLoader.load(camino, function (buffer) {
+            //CamaraPerspectiva.add(listener);
+            musica.position.set(95, 45, 1);
+            musica.setBuffer(buffer);
+            musica.setLoop(true);
+            musica.setVolume(1);
+            musica.setRefDistance(60);
+            musica.setMaxDistance(60);
+        });
+        CuboFinal.add(musica);
+        
+
+        // Paredes
+        const textureLoader = new THREE.TextureLoader();
+        const texturaPared = textureLoader.load('Recursos/Ladrillos.jpg');
+        const geometriaParedV = new THREE.BoxGeometry(2, 12, 20);
+        const geometriaParedH = new THREE.BoxGeometry(12, 2, 20);
+        const materialPared = new THREE.MeshStandardMaterial({ map: texturaPared });
+
+        for (let i = 0; i < 5; i++) {
+            const paredIzq = new THREE.Mesh(geometriaParedV, materialPared);
+            paredIzq.position.set(0, (10*i)+5, 10);
+            Escena.add(paredIzq);
+        }
+
+        for (let i = 0; i < 5; i++) {
+            const paredDer = new THREE.Mesh(geometriaParedV, materialPared);
+            paredDer.position.set(100, (10*i)+5, 10);
+            Escena.add(paredDer);
+        }
+
+        for (let i = 0; i < 10; i++) {
+            const paredArr = new THREE.Mesh(geometriaParedH, materialPared);
+            paredArr.position.set((10*i)+5, 50, 10);
+            Escena.add(paredArr);
+        }
+
+        for (let i = 0; i < 10; i++) {
+            const paredAbj = new THREE.Mesh(geometriaParedH, materialPared);
+            paredAbj.position.set((10*i)+5, 0, 10);
+            Escena.add(paredAbj);
+        }
+
+        // Definir la posición de las paredes
+        const paredes = [
+        { position: [5, 10, 5], size: geometriaParedH }, { position: [15, 10, 5], size: geometriaParedH }, { position: [15, 20, 5], size: geometriaParedH },
+        { position: [25, 20, 5], size: geometriaParedH }, { position: [5, 30, 5], size: geometriaParedH }, { position: [15, 40, 5], size: geometriaParedH },
+        { position: [25, 40, 5], size: geometriaParedH }, { position: [35, 30, 5], size: geometriaParedH }, { position: [45, 20, 5], size: geometriaParedH },
+        { position: [65, 20, 5], size: geometriaParedH }, { position: [65, 40, 5], size: geometriaParedH }, { position: [75, 30, 5], size: geometriaParedH },
+        { position: [55, 30, 5], size: geometriaParedH }, { position: [85, 20, 5], size: geometriaParedH }, { position: [95, 40, 5], size: geometriaParedH },
+        { position: [85, 40, 5], size: geometriaParedH }, { position: [95, 30, 5], size: geometriaParedH }, { position: [75, 10, 5], size: geometriaParedH },
+        { position: [45, 10, 5], size: geometriaParedH }, { position: [30, 5, 5], size: geometriaParedV }, { position: [30, 15, 5], size: geometriaParedV },
+        { position: [30, 25, 5], size: geometriaParedV }, { position: [40, 25, 5], size: geometriaParedV }, { position: [10, 35, 5], size: geometriaParedV },
+        { position: [50, 15, 5], size: geometriaParedV }, { position: [60, 15, 5], size: geometriaParedV }, { position: [70, 15, 5], size: geometriaParedV },
+        { position: [50, 35, 5], size: geometriaParedV }, { position: [60, 45, 5], size: geometriaParedV }, { position: [60, 35, 5], size: geometriaParedV },
+        { position: [70, 35, 5], size: geometriaParedV }, { position: [80, 25, 5], size: geometriaParedV }, { position: [90, 5, 5], size: geometriaParedV },
+        { position: [80, 5, 5], size: geometriaParedV }
+        ];
+
+        // Crear las paredes
+        paredes.forEach(pared => {
+        const mesh = new THREE.Mesh(pared.size, materialPared);
+        mesh.position.set(...pared.position);
+        Escena.add(mesh);
+        });
+
+        //Auxiliar Lobo
+        const geometriaAuxLobo = new THREE.SphereGeometry(.001, 32, 32);
+        const materialAuxLobo = new THREE.MeshBasicMaterial({ color: 0xff0000 });
+        const AuxLobo = new THREE.Mesh(geometriaAuxLobo, materialAuxLobo);
+        AuxLobo.position.set(5, 5, 5);
+        Escena.add(AuxLobo);
+        const luzLobo = new THREE.PointLight(0xffffff,.5,50,2);
+        luzLobo.position.set(0,0,5);
+        AuxLobo.add(luzLobo);
+
+        //Auxiliar Camara
+        const AuxCam = new THREE.Mesh(geometriaAuxLobo, materialAuxLobo);
+        AuxCam.position.set(8, 5, 4);
+        Escena.add(AuxCam);
+
+        // Codigo Oswald
+        const loaderOswald = new OBJLoader();
+        const texturaO = new THREE.TextureLoader();
+        let object;
+        loaderOswald.load('./Recursos/Oswald/source/Oswald.obj',
+            (Oswald) => {
+                object = Oswald;
+                const texturaOswald = texturaO.load('./Recursos/Oswald/textures/texturaOswald.png');
+                object.traverse((child) => {
+                    if (child instanceof THREE.Mesh) {
+                        child.material.map = texturaOswald;
+                    }
+                });
+                object.scale.set(.5, .5, .5);
+                object.position.set(95, 45, 1);
+                object.rotation.set(Math.PI / 2, -Math.PI / 2, 0);
+                Escena.add(object);
+            },
+            (xhr) => {
+                console.log('Oswald ' + (xhr.loaded / xhr.total) * 100 + '% cargado');
+            },
+            (error) => {
+                console.error('Error al cargar el modelo .obj', error);
+            }
+        );
+
+        // Codigo Lobo
+        let loboLoaded = false;
+        let Lobo;
+        let mixer;
+        let animations;
+        const IjbiñijLoader = new GLTFLoader();
+        IjbiñijLoader.load('./Recursos/Ijbiñij.glb',
+            (loadedObject) => {
+                Lobo = loadedObject.scene;
+                Lobo.scale.set(6, 6, 6);
+                Lobo.position.set(0, 0, -4.3);
+                Lobo.rotation.set(Math.PI / 2, Math.PI / 2, 0);
+                AuxLobo.add(Lobo);
+                animations = loadedObject.animations;
+                mixer = new THREE.AnimationMixer(Lobo);
+                loboLoaded = true;
+            });
+
+        // Crear camara ortográfica inicialmente
+        alternarModoCamara();
+        //alternarModoCamara();   
+
+        //Cambiar la camara
+        window.addEventListener('keydown', function(event) {
+            if (event.key === 'o') {
+                alternarModoCamara();
+            }
+        });
+
+        //Teclado
+        const teclasFunciones = {
+            'w': {
+                presionada: false,
+                activar: activarAnimacionLobo,
+                detener: detenerAnimacionLobo
+            },
+            'a': {
+                presionada: false,
+                activar: activarAnimacionLobo,
+                detener: detenerAnimacionLobo
+            },
+            's': {
+                presionada: false,
+                activar: activarAnimacionLobo,
+                detener: detenerAnimacionLobo
+            },
+            'd': {
+                presionada: false,
+                activar: activarAnimacionLobo,
+                detener: detenerAnimacionLobo
+            }
+        };
+
+        document.addEventListener('keydown', function (event) {
+            const tecla = event.key;
+            if (teclasFunciones[tecla] && !teclasFunciones[tecla].presionada) {
+                teclasFunciones[tecla].presionada = true;
+                teclasFunciones[tecla].activar();
+            }
+        });
+
+        document.addEventListener('keyup', function (event) {
+            const tecla = event.key;
+            if (teclasFunciones[tecla]) {
+                teclasFunciones[tecla].presionada = false;
+                teclasFunciones[tecla].detener();
+            }
+        });
+
+        function activarAnimacionLobo() {
+            if (mixer && animations && animations.length > 0) {
+                const animacionDeseadaIndex = 0;
+                const action = mixer.clipAction(animations[animacionDeseadaIndex]);
+                action.reset();
+                action.play();
+            }
+        }
+
+        function detenerAnimacionLobo() {
+            if (mixer && animations && animations.length > 0) {
+                const animacionDeseadaIndex = 0;
+                const action = mixer.clipAction(animations[animacionDeseadaIndex]);
+                action.stop();
+            }
+        }
+
+        // Delta Tiempo y animaciones
+        let tiempoAnterior = 0;
+        const velocidadMovimiento = 10;
+        const loboPosition =0 ;
+
+        function Animacion(tiempoActual) {
+            const deltaTime = (tiempoActual - tiempoAnterior) / 1000;
+            tiempoAnterior = tiempoActual;
+
+            if (mixer) {
+                mixer.update(deltaTime);
+            }
+
+            if (teclasFunciones['w'].presionada) {
+                Lobo.rotation.y = -Math.PI / 1;
+                rotacionActual = 0;
+                AuxCam.position.set(AuxLobo.position.x, AuxLobo.position.y+3, 5);
+                const velocidad = new THREE.Vector3(0, velocidadMovimiento * deltaTime, 0);
+                AuxLobo.position.add(velocidad);
+                musica.play();
+            }
+
+            if (teclasFunciones['a'].presionada) {
+                Lobo.rotation.y = -Math.PI / 2;
+                rotacionActual = -Math.PI / 2;
+                AuxCam.position.set(AuxLobo.position.x-3,AuxLobo.position.y , 5);
+                const velocidad = new THREE.Vector3(-velocidadMovimiento * deltaTime, 0, 0);
+                AuxLobo.position.add(velocidad);
+                musica.play();
+            }
+
+            if (teclasFunciones['s'].presionada) {
+                Lobo.rotation.y = 0;
+                rotacionActual = Math.PI / 1;
+                AuxCam.position.set(AuxLobo.position.x, AuxLobo.position.y-3, 5);
+                const velocidad = new THREE.Vector3(0, -velocidadMovimiento * deltaTime, 0);
+                AuxLobo.position.add(velocidad);
+                musica.play();
+            }
+
+            if (teclasFunciones['d'].presionada) {
+                Lobo.rotation.y = Math.PI / 2;
+                rotacionActual =  Math.PI / 2;
+                AuxCam.position.set(AuxLobo.position.x+3, AuxLobo.position.y , 5);
+                const velocidad = new THREE.Vector3(velocidadMovimiento * deltaTime, 0, 0);
+                AuxLobo.position.add(velocidad);
+                musica.play();
+            }
+
+            if (CamaraPerspectiva) {
+                CamaraPerspectiva.position.copy(AuxLobo.position);
+                CamaraPerspectiva.lookAt(AuxCam.position.x,AuxCam.position.y,AuxCam.position.z);
+                CamaraPerspectiva.rotateZ(-rotacionActual);
+            }
+
+            
+            requestAnimationFrame(Animacion);
+            const camara = CamaraPerspectiva ? CamaraPerspectiva : CamaraOrtografica; 
+
+            Render.render(Escena, camara);
+        }
+
+        function iniciarAnimacion() {
+            requestAnimationFrame(function (timestamp) {
+                tiempoAnterior = timestamp;
+                Animacion(timestamp);
+            });
+        }
+        iniciarAnimacion();
+
+        }
+
+        function iniciar() {
+            document.getElementById('inicio').style.display = 'none';
+            cargarEscena();
+        }
+
+        document.getElementById('playButton').addEventListener('click', iniciar);
+
+        
+
+    </script>
+</body>
+</html>
